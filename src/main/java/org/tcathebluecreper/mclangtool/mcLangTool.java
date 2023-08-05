@@ -10,23 +10,20 @@ import java.util.*;
 import java.io.*;
 
 
-public class Main {
+public class mcLangTool {
+    public static final String name = "MClangTool";
+    public static final String info = name + ": Translation utils for pack dev";
     public static String mainPath = "C:\\Users\\user\\AppData\\Local\\MClangTOOL";
-    public static ArrayList<String> runQue;
-    public static ArrayList<String> runLog;
     static InputManager IM;
-    public static void main(String[] args) throws IOException {
-        runQue = new ArrayList<>(List.of(args));
-        runLog = new ArrayList<>(List.of(args));
-        Scanner scanner = new Scanner(System.in);
-        IM = new InputManager(runQue);
+    public static void start(InputManager im) throws IOException {
+        IM = im;
         switch (IM.requestInput("create: create new lang project\nload: load old lang project", new String[]{"create", "load"}, inputMode.anyCap)) {
             case "load" ->
-                loadProject(IM.requestInput(Arrays.toString(removeExtensions(listProjects())), removeExtensions(listProjects()), inputMode.anyCap), scanner);
+                    loadProject(IM.requestInput(Arrays.toString(removeExtensions(listProjects())), removeExtensions(listProjects()), inputMode.anyCap));
 
             case "create" -> {
                 String name = IM.requestInput("name", removeExtensions(listProjects()), inputMode.anyCapInverted);
-                createProject(name, IM.requestInput("lang file path", new String[0], inputMode.anyCap), scanner);
+                createProject(name, IM.requestInput("lang file path", new String[0], inputMode.anyCap));
             }
         }
 
@@ -36,7 +33,57 @@ public class Main {
         if(!Files.exists(path)) Files.createDirectories(path);
         return new File(mainPath).list();
     }
-    static void loadProject(String id, Scanner scanner) {
+    static void createProject(String name, String path) {
+        File file = new File(mainPath + "\\" + name + ".lpd");
+        System.out.println("creating project file");
+        try{
+            file.createNewFile();
+            FileWriter writer = new FileWriter(file);
+            writer.write(path);
+            writer.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        loadProject(name);
+    }
+    static ProjectData getPD(String id) {
+        File _file = new File(mainPath + "\\" + id + ".lpd");
+        try {
+            Scanner file = new Scanner(_file);
+            return new ProjectData(file.nextLine());
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    static Hashtable<String, Hashtable<String, String>> getProjectLang(ProjectData pd) {
+        try {
+            Hashtable<String, Hashtable<String, String>> lang = new Hashtable<>();
+            Scanner file = new Scanner(new File(pd.path));
+
+            while(true) {
+                if(!file.hasNextLine()) return lang;
+                String s = file.nextLine();
+                String[] S = s.trim().split(":", 2);
+                if(S.length == 2) {
+                    String _s = S[0].substring(S[0].indexOf('\"') + 1, S[0].lastIndexOf('\"')).replaceAll("\"", "");
+                    String _S = S[1].substring(S[1].indexOf('\"') + 1, S[1].lastIndexOf('\"'));
+                    String type;
+                    try{
+                        type = _s.substring(0, _s.indexOf('.'));
+                    } catch (StringIndexOutOfBoundsException e) {
+                        System.out.println("\u001B[31m invalid json file, either corrupt or has been messed with");
+                        throw new RuntimeException(e);
+                    }
+                    if (!lang.containsKey(type))
+                        lang.put(type, new Hashtable<>());
+                    lang.get(type).put(_s, _S);
+                }
+            }
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    static void loadProject(String id) {
         System.out.println();
         ProjectData pd = getPD(id);
         Hashtable<String, Hashtable<String, String>> lang = getProjectLang(pd);
@@ -45,7 +92,7 @@ public class Main {
 
         while(true) {
             System.out.println();
-            String input = IM.requestInput("add: add a new translation\nrename: rename an element\nsave: save lang file\nexit: exit project\nclose: exit application\nlist: list all translations\ninput log: show all the inputs this session\nproj edit: edit project settings", new String[]{"add", "rename", "save", "delete", "exit", "close","list", "input log", "proj edit"}, inputMode.anyCap);
+            String input = IM.requestInput("add: add a new translation\nrename: rename an element\nsave: save lang file\nexit: exit project\nclose: exit application\nlist: list all translations\ndelete: delete a translation\ninput log: show all the inputs this session\nproj edit: edit project settings", new String[]{"add", "rename", "save", "exit", "close", "list", "delete", "input log", "proj edit"}, inputMode.anyCap);
             switch (input) {
                 case "add" -> {
                     String namespace = IM.requestInput("namespace, i.e. block.contenttweaker", new String[0], inputMode.anyCap);
@@ -143,11 +190,11 @@ public class Main {
                             System.out.println(Key + " :" + lang.get(key).get(Key));
                         }
                     }
-                    System.out.println("");
+                    System.out.println();
                 }
                 case "exit" -> {
                     try {
-                        new Main().main(new String[0]);
+                        start(IM);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -157,7 +204,7 @@ public class Main {
                 }
                 case "save" -> {
                     Enumeration<String> keys = lang.keys();
-                    String save = "{\n";
+                    StringBuilder save = new StringBuilder("{\n\t\"credit\":\"made with mcLangTool at ");
                     while (keys.hasMoreElements()) {
                         String key = keys.nextElement();
 
@@ -165,12 +212,12 @@ public class Main {
                         while (Keys.hasMoreElements()) {
                             String Key = Keys.nextElement();
                             //System.out.println(Key + " :" + lang.get(key).get(Key));
-                            save += "\t\"" + Key + "\":\"" + lang.get(key).get(Key) + '"';
-                            if(Keys.hasMoreElements()) save += ",\n";
+                            save.append("\t\"").append(Key).append("\":\"").append(lang.get(key).get(Key)).append('"');
+                            if(Keys.hasMoreElements()) save.append(",\n");
                             System.out.println(Key + " :" + lang.get(key).get(Key));
                         }
                     }
-                    save +=  "\n}";
+                    save.append("\n}");
                     File file = new File(pd.path);
                     try {
                         Formatter f = new Formatter(file);
@@ -179,31 +226,29 @@ public class Main {
                             f.format("");
                         }
                         FileWriter writer = new FileWriter(file);
-                        writer.write(save);
+                        writer.write(save.toString());
                         writer.close();
-                    } catch (FileNotFoundException e) {
-                        throw new RuntimeException(e);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
                 }
                 case "input log" -> {
-                    String s = "";
-                    int c = runLog.size();
+                    StringBuilder s = new StringBuilder();
+                    int c = IM.getRunLog().size();
                     for(int i = 0; i < c; i++) {
-                        s += runLog.get(i);
-                        if(i + 1 < c) s += ", ";
+                        s.append(IM.getRunLog().get(i));
+                        if(i + 1 < c) s.append(", ");
                     }
                     System.out.println(s);
                     switch(IM.requestInput("show unmapped for args: y/n", new String[]{"y","yes","n","no"}, inputMode.anyCap).toLowerCase()) {
                         case "yes", "y" -> {
-                            s = "";
-                            c = runLog.size();
+                            s = new StringBuilder();
+                            c = IM.getRunLog().size();
 
                             for(int i = 0; i < c - c / 2 - 2; i++) {
-                                String l = runLog.get(i).substring(runLog.get(i).indexOf(":") + 1).replaceAll(" ", "--");
-                                s += l;
-                                if(i + 1 < c) s += " ";
+                                String l = IM.getRunLog().get(i).substring(IM.getRunLog().get(i).indexOf(":") + 1).replaceAll(" ", "--");
+                                s.append(l);
+                                if(i + 1 < c) s.append(" ");
                             }
                             System.out.println(s);
                         }
@@ -228,56 +273,6 @@ public class Main {
                     }
                 }
             }
-        }
-    }
-    static void createProject(String name, String path, Scanner scanner) {
-        File file = new File(mainPath + "\\" + name + ".lpd");
-        System.out.println("creating project file");
-        try{
-            file.createNewFile();
-            FileWriter writer = new FileWriter(file);
-            writer.write(path);
-            writer.close();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        loadProject(name, scanner);
-    }
-    static ProjectData getPD(String id) {
-        File _file = new File(mainPath + "\\" + id + ".lpd");
-        try {
-            Scanner file = new Scanner(_file);
-            return new ProjectData(file.nextLine());
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-    }
-    static Hashtable<String, Hashtable<String, String>> getProjectLang(ProjectData pd) {
-        try {
-            Hashtable<String, Hashtable<String, String>> lang = new Hashtable<>();
-            Scanner file = new Scanner(new File(pd.path));
-
-            while(true) {
-                if(!file.hasNextLine()) return lang;
-                String s = file.nextLine();
-                String[] S = s.trim().split(":", 2);
-                if(S.length == 2) {
-                    String _s = S[0].substring(S[0].indexOf('\"') + 1, S[0].lastIndexOf('\"')).replaceAll("\"", "");
-                    String _S = S[1].substring(S[1].indexOf('\"') + 1, S[1].lastIndexOf('\"'));
-                    String type = _s;
-                    try{
-                        type = _s.substring(0, _s.indexOf('.'));
-                    } catch (StringIndexOutOfBoundsException e) {
-                        System.out.println("\u001B[31m invalid json file, either corrupt or has been messed with");
-                        throw new RuntimeException(e);
-                    }
-                    if (!lang.containsKey(type))
-                        lang.put(type, new Hashtable<>());
-                    lang.get(type).put(_s, _S);
-                }
-            }
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
         }
     }
 }
